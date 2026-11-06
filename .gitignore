@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Sanal ortam
+venv/
+env/
+.env/
+
+# Yedekler
+backups/
+
+# Silinmiş / kapsam dışı dosyalar
+ball.py
+benchmark.py
+tenis_takip.py
+court_corners.json
+input/
+
+# IDE
+.vscode/
+*.code-workspace
