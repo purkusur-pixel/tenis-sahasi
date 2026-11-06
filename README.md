@@ -8,14 +8,21 @@ Sabit bir kameradan gelen görüntüde oyuncuyu bulur, takip eder ve kortun hang
 
 ---
 
-## 📺 Demo Videoları
+## 📺 Demo ve Test Videoları
 
-Aşağıdaki videolar gerçek tenis kortunda, Raspberry Pi üzerinde **canlı olarak** kaydedilmiştir.
+Aşağıdaki videolar gerçek tenis kortunda, Raspberry Pi üzerinde kaydedilmiş ve arşivden aktarılmış takip test videolarıdır:
 
-| Video | Açıklama | Boyut |
+| Video | Algoritma / Koşu | Boyut |
 |---|---|---|
-| [`tracked_csrt_fast_4.mp4`](output/tracked_csrt_fast_4.mp4) | Kısa / özet demo | 9.8 MB |
-| [`tracked_csrt_fast_2.mp4`](output/tracked_csrt_fast_2.mp4) | Orta uzunlukta tam koşu | 92.3 MB |
+| [`tracked_csrt_fast.mp4`](test_videolari/tracked_csrt_fast.mp4) | CSRT_FAST Segment 1 | ~35 MB |
+| [`tracked_csrt_fast_2.mp4`](test_videolari/tracked_csrt_fast_2.mp4) | CSRT_FAST Segment 2 | ~35 MB |
+| [`tracked_csrt_fast_3.mp4`](test_videolari/tracked_csrt_fast_3.mp4) | CSRT_FAST Segment 3 | ~35 MB |
+| [`tracked_csrt_fast_4.mp4`](test_videolari/tracked_csrt_fast_4.mp4) | CSRT_FAST Segment 4 | ~35 MB |
+| [`tracked_csrt_fast_7.mp4`](test_videolari/tracked_csrt_fast_7.mp4) | CSRT_FAST Kısa Demo | ~15 MB |
+| [`tracked_mosse.mp4`](test_videolari/tracked_mosse.mp4) | MOSSE Yüksek Hız Testi 1 | ~35 MB |
+| [`tracked_mosse_2.mp4`](test_videolari/tracked_mosse_2.mp4) | MOSSE Yüksek Hız Testi 2 | ~35 MB |
+
+> Tüm videolar `test_videolari/` dizininde yer almaktadır ve Git LFS ile yönetilmektedir.
 
 Her videoda şunları göreceksiniz:
 - Korta projekte edilmiş **ızgara hücre numaraları** (perspektife uygun)
@@ -257,7 +264,11 @@ Hata ∝ mesafe² / (odak × kamera yüksekliği) bağıntısıyla modellenmiş 
 | [`tools/compare.py`](tools/compare.py) | 345 | Yer gerçeği (GT) ile takip başarım/hata metrik analizi |
 | [`tools/eval_runner.py`](tools/eval_runner.py) | 150 | Otomatik çoklu video/takipçi değerlendirme matrisi |
 | [`tools/fps_bench.py`](tools/fps_bench.py) | 200 | Detaylı FPS profilleme aracı |
+| [`tools/_matrix_run.py`](tools/_matrix_run.py) | 37 | 4 takipçi × 4 tahmin modeli toplu matris koşturucu |
+| [`tools/_matrix_iso.py`](tools/_matrix_iso.py) | 50 | İzole ortam matris test betiği |
 | [`court_corners.json`](court_corners.json) | - | Varsayılan kalibrasyon köşe koordinatları |
+| [`test_videolari/`](test_videolari/) | - | Arşivden aktarılan 9 test videosu + `matrix/` & `matrix_iso/` sonuçları |
+| [`veri/`](veri/) | - | 144 adet GT değerlendirme verisi (`eval_gt/`), referans etiketleri, indeksler ve overlayler |
 
 ---
 

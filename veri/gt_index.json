@@ -1,0 +1,131 @@
+{
+ "step": 5,
+ "format": "jpg",
+ "segments": [
+  {
+   "folder": "A1_seg1_orta",
+   "video": "A1",
+   "video_path": "C:\\Users\\bjkem\\Desktop\\staj5.1_yedek_20260727\\staj5.1\\input\\A1.mp4",
+   "start": 0,
+   "end": 300,
+   "step": 5,
+   "stratum": "orta",
+   "attrs": [
+    "FM",
+    "SV"
+   ],
+   "frames_written": 60
+  },
+  {
+   "folder": "A1_seg2_yakin",
+   "video": "A1",
+   "video_path": "C:\\Users\\bjkem\\Desktop\\staj5.1_yedek_20260727\\staj5.1\\input\\A1.mp4",
+   "start": 650,
+   "end": 950,
+   "step": 5,
+   "stratum": "yakin",
+   "attrs": [
+    "FM",
+    "SV"
+   ],
+   "frames_written": 60
+  },
+  {
+   "folder": "A2_seg1_yakin",
+   "video": "A2",
+   "video_path": "C:\\Users\\bjkem\\Desktop\\staj5.1_yedek_20260727\\staj5.1\\input\\A2.mp4",
+   "start": 0,
+   "end": 300,
+   "step": 5,
+   "stratum": "yakin",
+   "attrs": [
+    "SV"
+   ],
+   "frames_written": 60
+  },
+  {
+   "folder": "A2_seg2_uzak",
+   "video": "A2",
+   "video_path": "C:\\Users\\bjkem\\Desktop\\staj5.1_yedek_20260727\\staj5.1\\input\\A2.mp4",
+   "start": 600,
+   "end": 900,
+   "step": 5,
+   "stratum": "uzak",
+   "attrs": [
+    "LR",
+    "SV"
+   ],
+   "frames_written": 60
+  },
+  {
+   "folder": "A2_seg3_orta",
+   "video": "A2",
+   "video_path": "C:\\Users\\bjkem\\Desktop\\staj5.1_yedek_20260727\\staj5.1\\input\\A2.mp4",
+   "start": 1600,
+   "end": 1900,
+   "step": 5,
+   "stratum": "orta",
+   "attrs": [
+    "FM",
+    "SV"
+   ],
+   "frames_written": 60
+  },
+  {
+   "folder": "A3_seg1_uzak",
+   "video": "A3",
+   "video_path": "C:\\Users\\bjkem\\Desktop\\staj5.1_yedek_20260727\\staj5.1\\input\\A3.mp4",
+   "start": 350,
+   "end": 650,
+   "step": 5,
+   "stratum": "uzak",
+   "attrs": [
+    "LR",
+    "FM",
+    "SV"
+   ],
+   "frames_written": 60
+  },
+  {
+   "folder": "A3_seg2_orta",
+   "video": "A3",
+   "video_path": "C:\\Users\\bjkem\\Desktop\\staj5.1_yedek_20260727\\staj5.1\\input\\A3.mp4",
+   "start": 950,
+   "end": 1250,
+   "step": 5,
+   "stratum": "orta",
+   "attrs": [
+    "FM",
+    "SV"
+   ],
+   "frames_written": 60
+  },
+  {
+   "folder": "C01_seg1_uzak",
+   "video": "C01",
+   "video_path": "C:\\Users\\bjkem\\Desktop\\staj5.1_yedek_20260727\\staj5.1\\input\\C01.mp4",
+   "start": 200,
+   "end": 500,
+   "step": 5,
+   "stratum": "uzak",
+   "attrs": [
+    "LR",
+    "SV"
+   ],
+   "frames_written": 60
+  },
+  {
+   "folder": "C01_seg2_yakin",
+   "video": "C01",
+   "video_path": "C:\\Users\\bjkem\\Desktop\\staj5.1_yedek_20260727\\staj5.1\\input\\C01.mp4",
+   "start": 1400,
+   "end": 1700,
+   "step": 5,
+   "stratum": "yakin",
+   "attrs": [
+    "SV"
+   ],
+   "frames_written": 60
+  }
+ ]
+}
