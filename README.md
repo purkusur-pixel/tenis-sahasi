@@ -239,7 +239,9 @@ Hata ∝ mesafe² / (odak × kamera yüksekliği) bağıntısıyla modellenmiş 
 
 | Dosya | Satır | Görevi |
 |---|---:|---|
-| [`main.py`](main.py) | 1 306 | Ana döngü, kurulum sırası, çizim |
+| [`main.py`](main.py) | 1 306 | Ana döngü, kurulum sırası, çizim (modüler sürüm) |
+| [`tenis_takip.py`](tenis_takip.py) | ~3 000 | **Tek dosya (All-in-One)** tüm boru hattı — bağımsız çalıştırma için |
+| [`benchmark.py`](benchmark.py) | 181 | PC vs Raspberry Pi performans & aşama kıyaslama aracı |
 | [`config.py`](config.py) | ~800 | Tüm ayarlar (gerekçeleriyle) |
 | [`court.py`](court.py) | 964 | Kort tespiti, homografi, köşe ince ayarı |
 | [`mjpeg.py`](mjpeg.py) | 604 | MJPEG yayını + telefon kurulum sayfası |
@@ -252,6 +254,10 @@ Hata ∝ mesafe² / (odak × kamera yüksekliği) bağıntısıyla modellenmiş 
 | [`background.py`](background.py) | 140 | Medyan arka plan modeli + tazeleme |
 | [`framereader.py`](framereader.py) | 80 | İş parçacıklı dosya okuma |
 | [`shot.py`](shot.py) | 64 | Sahne kesme tespiti |
+| [`tools/compare.py`](tools/compare.py) | 345 | Yer gerçeği (GT) ile takip başarım/hata metrik analizi |
+| [`tools/eval_runner.py`](tools/eval_runner.py) | 150 | Otomatik çoklu video/takipçi değerlendirme matrisi |
+| [`tools/fps_bench.py`](tools/fps_bench.py) | 200 | Detaylı FPS profilleme aracı |
+| [`court_corners.json`](court_corners.json) | - | Varsayılan kalibrasyon köşe koordinatları |
 
 ---
 
@@ -259,7 +265,7 @@ Hata ∝ mesafe² / (odak × kamera yüksekliği) bağıntısıyla modellenmiş 
 
 ### Gereksinimler
 
-- Raspberry Pi 4 (veya daha yenisi önerilir)
+- Raspberry Pi 4 (veya daha yenisi önerilir) ya da x86_64 PC
 - Python 3.11+
 - OpenCV 4.x (contrib ile — CSRT ve KCF için)
 - USB kamera, CSI şerit kablolu Pi kamerası veya RTSP ağ kamerası
@@ -268,15 +274,21 @@ Hata ∝ mesafe² / (odak × kamera yüksekliği) bağıntısıyla modellenmiş 
 
 ```bash
 # Depoyu klonla
-git clone https://github.com/utku-emre/staj5.2.git
-cd staj5.2
+git clone https://github.com/purkusur-pixel/tenis-sahasi.git
+cd tenis-sahasi
 
 # Sanal ortam oluştur ve bağımlılıkları yükle
 python3 -m venv venv
 venv/bin/pip install opencv-contrib-python numpy
 
-# Çalıştır
+# Modüler ana sürümü çalıştır
 venv/bin/python main.py
+
+# VEYA tek dosya (stand-alone) sürümü çalıştır
+venv/bin/python tenis_takip.py
+
+# Performans kıyaslaması (benchmark) çalıştırmak için:
+venv/bin/python benchmark.py 200 CSRT_FAST
 ```
 
 ### Açılışta Otomatik Başlatma (systemd)
@@ -365,6 +377,8 @@ Program çalışırken [`output/`](output/) klasörüne şunları yazar:
 | `zone_summary.json` | Her bölgenin toplam süre ve ziyaret sayısı |
 | `eval_*.csv` | Takipçi değerlendirme sonuçları |
 | `_zone_map.jpg` | Statik bölge haritası |
+| `_zones_preview.jpg` | 80 hücreli perspektif bölge ızgarası görsel önizlemesi |
+| `_A1_court.jpg` | Örnek kort kalibrasyonu ve köşe çizgileri görseli |
 
 ---
 

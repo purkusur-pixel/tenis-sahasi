@@ -15,9 +15,6 @@ backups/
 
 # Silinmiş / kapsam dışı dosyalar
 ball.py
-benchmark.py
-tenis_takip.py
-court_corners.json
 input/
 
 # IDE
