@@ -190,7 +190,7 @@ def _y_at(line, x):
     return (c - n[0] * x) / n[1] if abs(n[1]) > 1e-9 else 1e9
 
 
-def auto_detect_corners(frame, verbose=True):
+def auto_detect_corners(frame, verbose=True, return_score=False):
     """
     Kortun 5 referans noktasini (file + yakin servis cizgisi kesisimleri)
     otomatik bulur.
@@ -205,14 +205,22 @@ def auto_detect_corners(frame, verbose=True):
 
     Donus: config.COURT_CORNERS_WORLD sirasinda (N, 2) float32 dizi, veya
            guvenilir bir cozum bulunamazsa None (-> elle secime dusulur).
+
+    return_score=True ise (koseler, puan) ikilisi doner. Puan, BASARISIZ
+    adaylari da birbiriyle kiyaslamaya yarar: birden fazla goruntu denenip
+    (temiz arka plan, farkli kareler) en yuksek puanli secilebilsin diye.
+    Esik (AUTO_MIN_SCORE) kontrolu burada aynen korunur; puan yalnizca
+    disariya EK bilgi olarak verilir, karar mantigi degismez.
     """
+    fail = (None, -1.0) if return_score else None
+
     h, w = frame.shape[:2]
     mask = _line_mask(frame)
 
     segments = cv2.HoughLinesP(mask, 1, np.pi / 360, threshold=55,
                                minLineLength=60, maxLineGap=18)
     if segments is None:
-        return None
+        return fail
 
     # OpenCV surumune gore sekil (N,1,4) veya (N,4) olabilir (or. OpenCV 5.x
     # (N,4) donuyor, eski surumler (N,1,4)); reshape(-1,4) ikisini de N x
@@ -222,7 +230,7 @@ def auto_detect_corners(frame, verbose=True):
                    key=lambda l: -_y_at(l, w * 0.5))          # en alttaki once
     steep = [l for l in lines if abs(l["ang"]) >= config.LINE_HORIZ_MAX_ANGLE]
     if len(horiz) < 2 or len(steep) < 2:
-        return None
+        return fail
 
     # --- Dogrulama puanlayicisi ---------------------------------------------
     # SADECE yakin yari (dunya y >= NET_Y) puanlanir: uzak yari file tarafindan
@@ -306,18 +314,21 @@ def auto_detect_corners(frame, verbose=True):
             got = "{:.3f}".format(best[0]) if best else "yok"
             print("Otomatik kort tespiti basarisiz (puan {} < {}).".format(
                 got, config.AUTO_MIN_SCORE))
-        return None
+        # Esigi gecemedi -> koseler yok; ama puan (varsa) disari verilir ki
+        # cagiran taraf birden fazla adayi kiyaslayabilsin.
+        return (None, best[0]) if (return_score and best is not None) else fail
 
     score, H_inv = best
     corners = []
     for wx, wy in config.COURT_CORNERS_WORLD:
         p = court_to_image(H_inv, float(wx), float(wy))
         if p is None:
-            return None
+            return fail
         corners.append(p)
     if verbose:
         print("Otomatik kort tespiti: puan {:.3f}".format(score))
-    return np.array(corners, dtype=np.float32)
+    out = np.array(corners, dtype=np.float32)
+    return (out, score) if return_score else out
 
 
 def _doubles_candidates(ordered, y_base, frame_w):

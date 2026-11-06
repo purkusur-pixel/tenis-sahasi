@@ -48,6 +48,107 @@ THREADED_READ = False   # NOT: bu Pi'de True iken ffmpeg "async_lock" assertion 
                         # cozulurse tekrar True yapilabilir.
 THREADED_QUEUE = 4       # Kac kare onden decode edilecek (bellek/gecikme dengesi).
 
+# ==============================================================================
+# 1b) CANLI KAMERA KIPI  (top atma makinesi uzerine monte; gercek zamanli)
+# ==============================================================================
+# TASARIM KURALI: bu bolumdeki her sey BAYRAKLA acilir. LIVE_MODE=False iken
+# boru hatti eskisi gibi dosyadan calisir ve BULGULAR.md'deki olcumler aynen
+# yeniden uretilebilir. Canli kip mevcut mimariyi DEGISTIRMEZ, uzerine biner.
+#
+# DOSYA ile CANLI arasindaki YAPISAL farklar (kod bunlara gore ayrisir):
+#   1. Geri sarma yok  -> cap.set(POS_FRAMES) canli kaynakta calismaz.
+#   2. Kaynak iki kez acilamaz -> arka plan modeli ACIK cap'ten kurulur.
+#   3. Akis bitmez     -> dosya sonu yerine sonsuz dongu + temiz Ctrl-C.
+#   4. Kareler birikir -> islenmeyen kare TAMPONDA bekler, gecikme buyur.
+#   5. Kort her kurulumda FARKLI acidan gorunur -> kayitli koseler gecersiz.
+
+LIVE_MODE = True         # True -> canli kamera kipi (asagidaki ayarlar devreye girer).
+                         # Dosyadan calistirmak istersen False yap (VIDEO_PATH kullanilir).
+
+# Kaynak: "picamera2" (CSI serit kablolu Pi kamera), int (USB webcam indeksi)
+# veya str (RTSP/dosya yolu). CSI kamera OpenCV'ye DOGRUDAN gorunmez -- Pi 4 +
+# guncel Raspberry Pi OS'ta legacy V4L2 kamera arayuzu kapalidir; bu yuzden
+# picamera2 sarmalayicisi gerekir (bkz. livesource.py).
+#   "picamera2" -> CSI serit kablolu Pi kamera (Pi calisirken TAKILAMAZ,
+#                  yeniden baslatmak gerekir)
+#   0, 1, 2 ...  -> USB kamera indeksi (/dev/video0 -> 0). USB kamera calisirken
+#                  takilip cikarilabilir; dogru indeksi bulmak icin: ls /dev/video*
+#   "rtsp://..." -> ag kamerasi
+LIVE_SOURCE = 0
+LIVE_WIDTH = 1280        # Kameradan ISTENEN cozunurluk. Yuksek cozunurluk FPS
+LIVE_HEIGHT = 720        # yemez (isleme PROC_SCALE ile kucultulur) ama gecikme
+LIVE_FPS = 30            # ve bellek maliyeti artar.
+
+# picamera2'de "RGB888" isimlendirmesi yaniltici: dizi pratikte BGR duzeninde
+# gelir (OpenCV'nin bekledigi sira). Kamera takilinca renkler TERS gorunurse
+# (gok mavisi turuncu cikiyorsa) bunu True yapin -- tek dokunusla duzelir.
+LIVE_BGR_SWAP = False
+LIVE_WARMUP_SEC = 0.5    # Kamera baslarken pozlama/beyaz dengesi otursun diye beklenen sure.
+                         # Onemli: arka plan modeli TAM BU kareler uzerine kurulur;
+                         # karanlik ilk kareler modele girerse tespit bozulur.
+
+# En yeni kareyi isle, birikenleri AT. Dosyada her kare islenmeliydi (offline
+# dogruluk); canlida ise ONEMLI OLAN GECIKMEDIR: 5 kare geride kalmis dogru bir
+# konum, makineye nisan aldirmak icin ise yaramaz. Ayri bir thread surekli okur
+# ve yalnizca en son kareyi tutar (bkz. livesource.LatestFrame).
+LIVE_DROP_STALE = True
+LIVE_FIRST_FRAME_TIMEOUT = 5.0   # Acilista ilk kare icin beklenecek en fazla sure (sn).
+LIVE_READ_TIMEOUT = 2.0          # Yeni kare gelmezse okuma kac saniye sonra basarisiz sayilir.
+LIVE_MISS_TOLERANCE = 5          # Ust uste kac basarisiz okumadan sonra gercekten koptu sayilir.
+                                 # Dosyada okuma hatasi = video sonu; canlida ise
+                                 # gecici olabilir, hemen cikmak yanlis olur.
+
+# --- Arka plan tazeleme (YALNIZCA canli kipte; bkz. background.refresh) ------
+# Dosyada medyan videonun tamamindan alindigi icin model eskimezdi. Canlida
+# model acilistaki birkac saniyeden kurulur; isik/golge degistikce eskir ve
+# sahte on plan uretir. Oyuncunun KUTUSU DISLANARAK yavas guncellenir --
+# oyuncu modele sizarsa gorunmez olur (MOG2'yi bu yuzden kullanmiyoruz).
+BG_REFRESH_INTERVAL = 30   # Kac karede bir tazelensin. 0 -> kapali.
+BG_REFRESH_ALPHA = 0.02    # Karisim orani. Kucuk = yavas/kararli. 0.02 ~ 50 tazelemede tam donusum.
+BG_REFRESH_PAD = 24        # Oyuncu kutusunun disina eklenen emniyet payi (islenmis olcekte piksel).
+
+# --- Kort tespiti (canli kurulumda kritik) ----------------------------------
+# Makine her kurulumda FARKLI acidan bakacagi icin kayitli koseler kullanilamaz;
+# sistem kortu her acilista sifirdan bulmak zorunda. Bu, olculmus bir zayiflik:
+# otomatik tespit 4 videonun 1'inde tamamen basarisiz olmustu (bkz. BULGULAR.md
+# §6) ve ekransiz calismada elle duzeltme mumkun degil.
+#
+# Iki onlem: (a) tespiti OYUNCUSUZ medyan arka plan uzerinde yap -- oyuncu
+# cizgilerin ustunde durdugunda/golge yaptiginda tespiti bozuyordu; (b) tek kare
+# yerine birkac goruntu dene ve EN YUKSEK PUANLIYI sec.
+COURT_ON_BG = True          # Kort tespitini ham kare yerine medyan arka planda yap.
+COURT_DETECT_ATTEMPTS = 4   # Kac aday goruntu denenecek (arka plan + ham kareler).
+COURT_ATTEMPT_STRIDE = 15   # Ham kare adaylari arasinda kac kare atlanacak.
+COURT_IGNORE_SAVED = True   # Canli kipte court_corners.json'i YOK SAY (acilar degisiyor).
+
+# --- Overlay yayini (telefondan izlemek icin; bkz. mjpeg.py) ----------------
+# Pi ekransiz calisacak. Masaustunu acik tutmak hem yavaslatir hem korta laptop
+# tasimayi gerektirir. Bunun yerine overlay ag uzerinden MJPEG olarak yayinlanir:
+# telefonun tarayicisindan http://<pi-ip>:8080/ acilir. Istemci yokken maliyeti
+# sifirdir (kare JPEG'e yalnizca istek varken kodlanir).
+STREAM_ENABLED = True
+STREAM_PORT = 8080
+STREAM_QUALITY = 70      # JPEG kalitesi (1-100). Dusur -> daha az bant genisligi/CPU.
+STREAM_MAX_FPS = 12      # Yayin hizi tavani. Isleme hizini SINIRLAMAZ, sadece kodlamayi.
+
+# --- Telefondan kort kurulumu (son care) ------------------------------------
+# Otomatik tespit basarisiz olursa program EKRANSIZ ortamda kurtarilamiyordu:
+# elle secim fare/ekran ister, Pi'de ikisi de yok -> program mesaj basip
+# cikiyordu. Olculen basarisizlik orani 4 videonun 1'i (BULGULAR.md §6), yani
+# her dort kurulumdan biri hic baslamazdi. Bu bayrak acikken ayni secim
+# tarayicidan yaptirilir: kullanici kortun kenarinda telefonuyla bes noktaya
+# dokunur. Ayni port kullanilir (yayin henuz baslamamistir).
+SETUP_ON_PHONE = True
+SETUP_TIMEOUT_SEC = 600  # Tespit BASARISIZ iken beklenecek sure. Bu durumda
+                         # onay gelmezse program baslayamaz, o yuzden uzun.
+
+# Tespit BASARILI olsa bile sayfayi ac (dogrulama icin). Kullanici cizgilerin
+# kortla ortustugunu GORUP onaylar; begenmezse noktalari surukleyip duzeltir.
+# Onay gelmezse asagidaki sure sonunda otomatik koselerle DEVAM EDILIR --
+# yani makine basinda kimse olmasa da sistem tek basina calisabilir.
+SETUP_CONFIRM_ON_PHONE = True
+SETUP_CONFIRM_TIMEOUT_SEC = 90
+
 # --- PERFORMANS OLCUMU (performance.py) -------------------------------------
 # Headless calismada terminale saniyede BIR kez FPS + asama sureleri basar,
 # programin sonunda toplu ozet cikarir. Pi <-> Windows karsilastirmasi icindir.
@@ -104,6 +205,20 @@ CORNERS_PATH = "court_corners.json"
 # KAPALI olmali. Adil kiyas icin FRAME_SKIP=1 kullan (kare numaralari eslessin).
 EVAL_LOG = False
 EVAL_LOG_PATH = "output/eval_track.csv"
+
+# Video bitince TRACKER PERFORMANCE SUMMARY raporunu OTOMATIK bas (compare.py).
+# Sart: EVAL_LOG acik + asagidaki YOLO referans CSV'si mevcut olmali. Referans
+# yoksa rapor sessizce atlanir (calisma etkilenmez).
+EVAL_AUTO_REPORT = True
+EVAL_REFERENCE_CSV = "referans_A1.csv"   # PC'de yolo_reference.py ile uretilir
+
+# Benchmark SEGMENTI: cok sayida kombinasyon (tracker x filtre) denenirken tum
+# videoyu islemek saatler surer. Bu iki ayar isleme penceresini kisitlar; kare
+# numaralari kaynak videoya gore yazildigi icin YOLO referansiyla hizali kalir.
+#   EVAL_START_FRAME : baslangic kaynak karesi (0 = bastan)
+#   EVAL_MAX_FRAMES  : islenecek kare sayisi   (0 = sonuna kadar)
+EVAL_START_FRAME = 0
+EVAL_MAX_FRAMES = 0
  
 KEY_QUIT = ord("q")
 KEY_PAUSE = ord(" ")

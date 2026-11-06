@@ -46,10 +46,32 @@ import court
 import detector
 import analysis
 import framereader
+import livesource
+import mjpeg
 import performance
 import predictors
 import shot
 import zones
+
+# Ctrl-C ile TEMIZ kapanis. Canli kipte program sonsuz calisir; kullanicinin
+# durdurmasi NORMAL bitis yoludur. Istisnayi dogrudan firlatip dongudan
+# atlamak yerine bayrak set ediyoruz ki dongu kendi turunu bitirsin ve
+# kaynaklar (kamera, yayin, cikti videosu, bolge analizi) duzgun kapansin --
+# yoksa yarim yazilmis, acilmayan bir mp4 kalir.
+_STOP = {"now": False}
+
+
+def _install_sigint():
+    import signal
+
+    def _handler(_signum, _frame):
+        _STOP["now"] = True
+        print("\nDurdurma istegi alindi -- temiz kapaniliyor...")
+
+    try:
+        signal.signal(signal.SIGINT, _handler)
+    except (ValueError, OSError):
+        pass          # ana thread disinda cagrildiysa sessizce vazgec
 
 put_text = court._put_text
 
@@ -275,15 +297,92 @@ def motion_energy(fgmask, bbox, mog_scale):
     return float(cv2.countNonZero(cv2.compare(patch, 200, cv2.CMP_GE))) / patch.size
 
 
+def _detect_court_robust(frame, bg, cap, scale):
+    """
+    Kort koselerini BIRDEN FAZLA aday goruntude arar, en yuksek puanliyi secer.
+    YALNIZCA canli kipte cagrilir (dosya kipinde eski davranis aynen korunur --
+    aksi halde BULGULAR.md'deki olcumler yeniden uretilemez olurdu).
+
+    NEDEN GEREKLI: makine her kurulumda kortu FARKLI acidan gorecek, yani
+    kayitli koseler kullanilamaz; sistem kortu her acilista sifirdan bulmak
+    zorunda. Bu olculmus bir zayiflik: otomatik tespit dort videonun BIRINDE
+    tamamen basarisiz olmustu (BULGULAR.md §6) ve ekransiz calismada elle
+    duzeltme mumkun degil -- yani her dort kurulumdan biri hic baslamazdi.
+
+    Iki onlem:
+      1. Ilk aday MEDYAN ARKA PLAN: oyuncusuz, golgesiz, temiz kort goruntusu.
+         Ham ilk karede oyuncu cizginin uzerinde durup tespiti bozabiliyor.
+      2. Yetmezse akistan yeni ham kareler: isik ve oyuncunun yeri degistikce
+         tespit tutabilir. Denenen adaylar arasinda EN YUKSEK PUANLI kazanir.
+
+    Donus: (koseler | None, tespitin yapildigi goruntu)
+    """
+    candidates = []
+    if config.COURT_ON_BG and bg is not None:
+        candidates.append(("arka plan", bg))
+    candidates.append(("ilk kare", frame))
+
+    best_corners, best_score, best_img = None, -1.0, frame
+    tried = 0
+
+    for i in range(max(1, int(config.COURT_DETECT_ATTEMPTS))):
+        if i < len(candidates):
+            label, img = candidates[i]
+        else:
+            # Ek aday: akistan biraz ilerleyip taze bir kare al. Canli kipte
+            # kare tuketmek zararsizdir (kurulum asamasi, henuz takip yok).
+            img = None
+            for _ in range(max(1, int(config.COURT_ATTEMPT_STRIDE))):
+                ok, raw = cap.read()
+                if not ok:
+                    break
+                img = raw
+            if img is None:
+                break
+            if scale != 1.0:
+                img = cv2.resize(img, None, fx=scale, fy=scale,
+                                 interpolation=config.RESIZE_INTERP)
+            label = "taze kare {}".format(i - len(candidates) + 1)
+
+        corners, score = court.auto_detect_corners(img, verbose=False, return_score=True)
+        tried += 1
+        print("  kort adayi [{}]: puan {:.3f}{}".format(
+            label, score, "" if corners is not None else "   (esik alti)"))
+        if corners is not None and score > best_score:
+            best_corners, best_score, best_img = corners, score, img
+
+    if best_corners is None:
+        print("Otomatik kort tespiti BASARISIZ: {} aday denendi, hicbiri "
+              "AUTO_MIN_SCORE={} esigini gecemedi.".format(tried, config.AUTO_MIN_SCORE))
+        return None, frame
+
+    print("Kort tespiti kabul edildi: puan {:.3f} ({} aday denendi).".format(
+        best_score, tried))
+    return best_corners, best_img
+
+
 def main():
     # Takipci ve TAHMIN modeli secimi EN BASTA sorulur: agir kurulumdan (arka plan
     # modeli, kose secimi) once cevap alinsin, kullanici bosuna beklemesin.
     ask_tracker()
     ask_predict()
+    _install_sigint()
 
-    cap = cv2.VideoCapture(config.VIDEO_PATH)
-    if not cap.isOpened():
-        raise IOError("Video acilamadi: {}".format(config.VIDEO_PATH))
+    run_t0 = time.perf_counter()   # toplam islem suresi (eval raporu icin)
+
+    # KAYNAK: canli kamera mi, dosya mi? Canli kipte livesource ayri bir
+    # thread'de surekli okur ve YALNIZCA en son kareyi tutar -- boylece isleme
+    # yavaslasa bile gecikme birikmez (bkz. livesource.LatestFrame).
+    live = bool(config.LIVE_MODE)
+    if live:
+        cap = livesource.open_source()
+        if cap is None:
+            raise IOError("Canli kaynak acilamadi: {}".format(config.LIVE_SOURCE))
+        print("Canli kaynak acildi: {}".format(config.LIVE_SOURCE))
+    else:
+        cap = cv2.VideoCapture(config.VIDEO_PATH)
+        if not cap.isOpened():
+            raise IOError("Video acilamadi: {}".format(config.VIDEO_PATH))
 
     src_fps = cap.get(cv2.CAP_PROP_FPS)
     if not src_fps or src_fps <= 1.0 or src_fps > 240.0:
@@ -319,18 +418,78 @@ def main():
     # penceresi ne fare ile secim mumkundur -> otomatik tespit dogrudan (onaysiz)
     # kabul edilir; guvenlik AUTO_MIN_SCORE esigi + kaydedilen
     # output/first_frame_court_detection.jpg ile (offline) saglanir.
+    # --- ARKA PLAN MODELI (artik kort tespitinden ONCE kuruluyor) -----------
+    # NEDEN SIRA DEGISTI: kort tespiti eskiden ILK KAREDEN yapiliyordu, ama o
+    # karede oyuncu da var -- cizginin uzerinde durup ya da golge dusurup
+    # tespiti bozabiliyor. Medyan arka plan ise OYUNCUSUZ, temiz bir kort
+    # goruntusudur; tespit icin belirgin sekilde daha iyi bir girdi. Arka plan
+    # modelinin korta hicbir bagimliligi olmadigi icin one alinmasi guvenlidir.
+    #
+    # CANLI KIPTE AYRICA ZORUNLU: kamera IKINCI KEZ ACILAMAZ, bu yuzden zaten
+    # acik olan cap odunc verilir (bkz. background.build).
+    perf.start_setup("background")
+    bg = background.build(config.VIDEO_PATH, scale, cap=cap if live else None)
+    if bg is None:
+        cap.release()
+        raise RuntimeError("Arka plan modeli kurulamadi: goruntu okunamadi.")
+    perf.stop_setup("background")
+
     perf.start_setup("court_detection")
-    corners = court.load_corners(frame.shape)
-    if corners is not None:
-        print("Kayitli koseler yuklendi: {}".format(court.CORNERS_PATH))
+    court_img = frame          # ince ayar/onay, tespitle AYNI goruntuyu kullanmali
+
+    # Canli kipte kayitli koseler YOK SAYILIR: makine her kurulumda kortu baska
+    # acidan gorur; eski koseler sessizce yanlis bir homografi uretirdi.
+    corners = None
+    if live and config.COURT_IGNORE_SAVED:
+        print("Canli kip: kayitli koseler yok sayiliyor (kort acisi her kurulumda degisir).")
     else:
+        corners = court.load_corners(frame.shape)
+        if corners is not None:
+            print("Kayitli koseler yuklendi: {}".format(court.CORNERS_PATH))
+
+    if corners is None:
         if config.AUTO_DETECT_CORNERS:
-            corners = court.auto_detect_corners(frame)
+            if live:
+                corners, court_img = _detect_court_robust(frame, bg, cap, scale)
+            else:
+                corners = court.auto_detect_corners(frame)   # dosya: ESKI davranis aynen
             if corners is not None and config.AUTO_CONFIRM and config.SHOW_WINDOW:
-                if not court.confirm_corners(frame, corners):
+                if not court.confirm_corners(court_img, corners):
                     corners = None      # Kullanici reddetti -> elle sec.
         if corners is None and config.SHOW_WINDOW:
             corners = court.select_corners(frame)
+            court_img = frame
+
+        # TELEFONDAN KURULUM. Kullanici mevcut noktalari VE onlardan uretilen
+        # kort cizgilerini gorur; ortusme iyiyse onaylar, degilse noktayi
+        # surukler (cizgiler anlik guncellenir, sonuc tahmin edilmez GORULUR).
+        #
+        # IKI DURUMDA DA ACILIR, ama sonuclari FARKLIDIR:
+        #   - Tespit BASARISIZ -> tek kurtarma yolu (Pi'de ekran/fare yok).
+        #     Onay gelmezse program baslayamaz. Olculen basarisizlik orani
+        #     4 videonun 1'i (BULGULAR.md §6): bu yol olmadan her dort
+        #     kurulumdan biri HIC BASLAMIYORDU.
+        #   - Tespit BASARILI -> yalnizca DOGRULAMA. Onay gelmezse otomatik
+        #     bulunan koselerle devam edilir; boylece makine basinda kimse
+        #     olmasa da sistem kendi basina calisabilir.
+        need_setup = corners is None or config.SETUP_CONFIRM_ON_PHONE
+        if config.SETUP_ON_PHONE and need_setup:
+            # OYUNCUSUZ medyan arka plan gosterilir: cizgiler kapanmadigi icin
+            # kesisimleri gormek ve noktayi oturtmak cok daha kolay.
+            pick_img = bg if (config.COURT_ON_BG and bg is not None) else frame
+            pts = mjpeg.setup_court(
+                pick_img, config.COURT_CORNERS_WORLD, court.COURT_LINES,
+                initial_pts=(corners.tolist() if corners is not None else None),
+                port=config.STREAM_PORT, quality=config.STREAM_QUALITY,
+                timeout_sec=(config.SETUP_CONFIRM_TIMEOUT_SEC if corners is not None
+                             else config.SETUP_TIMEOUT_SEC),
+                auto_ok=(corners is not None))
+            if pts:
+                corners = np.array(pts, dtype=np.float32)
+                court_img = pick_img
+            elif corners is not None:
+                print("Onay gelmedi -> otomatik bulunan koselerle devam ediliyor.")
+
         if corners is None:
             cap.release()
             if not config.SHOW_WINDOW:
@@ -348,8 +507,11 @@ def main():
             else:
                 print("Kose secimi iptal edildi.")
             return
-        court.save_corners(corners, frame.shape)
-        print("Koseler kaydedildi: {}".format(court.CORNERS_PATH))
+        # Canli kipte kaydetmenin anlami yok: bir sonraki kurulumda kort acisi
+        # farkli olacagi icin bu koseler zaten yok sayilacak.
+        if not (live and config.COURT_IGNORE_SAVED):
+            court.save_corners(corners, frame.shape)
+            print("Koseler kaydedildi: {}".format(court.CORNERS_PATH))
     perf.stop_setup("court_detection")
 
     # Kort kalibrasyonu: koseler -> homography + tespit ROI'si.
@@ -361,7 +523,10 @@ def main():
     # homografiyi sikilastirir. Iyilesme yoksa noktalar aynen korunur (asla bozmaz).
     # Kurulumda TEK SEFER; FPS'e etkisi yok. Kayitli json'a YAZILMAZ (idempotent).
     if config.REFINE_CORNERS and corners is not None:
-        corners, _score_b, _score_a = court.refine_corners(frame, corners)
+        # Ince ayar, tespitin yapildigi goruntuyle AYNI goruntude yapilmali:
+        # canli kipte bu medyan arka plan olabilir (oyuncusuz -> daha temiz
+        # cizgi maskesi), dosya kipinde ilk karedir.
+        corners, _score_b, _score_a = court.refine_corners(court_img, corners)
 
     H, H_inv = court.compute_homography(corners)
 
@@ -377,11 +542,7 @@ def main():
     search_mask, search_rect = court.build_search_mask(frame.shape, H_inv)
     perf.stop_setup("court_calibration")
 
-    bg = background.build(config.VIDEO_PATH, scale)
-    if bg is None:
-        cap.release()
-        raise RuntimeError("Arka plan modeli kurulamadi: video okunamadi.")
-
+    # (Arka plan modeli yukarida, kort tespitinden once kuruldu.)
     det_state = detector.init(frame, search_mask, search_rect, bg, H, H_inv)
 
     # --- SABIT MAKINE TESPITI (bir kez; makine sabit -> medyan arka planda kalir) ---
@@ -469,8 +630,10 @@ def main():
     window_name = "Tenis Oyuncu Takibi"
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     # Threaded okuma cap'i sahiplenir; seek (cap.set) ile cakisir -> birlikte kapali.
+    # Canli kaynak geri sarilamaz -> kaydirma cubugu kurulmaz.
     seekable = (config.SHOW_WINDOW and config.SHOW_SEEKBAR and not config.THREADED_READ
-                and not isinstance(config.VIDEO_PATH, int) and total_frames > 1)
+                and not live and not isinstance(config.VIDEO_PATH, int)
+                and total_frames > 1)
     seek_to = [None]        # callback -> ana dongu: bekleyen hedef kare (kaynak indeksi).
     seek_syncing = [False]  # True iken trackbar guncellemesi PROGRAMATIKTIR -> callback yok say.
 
@@ -500,6 +663,7 @@ def main():
     smooth_motion = 0.0
     fps = 0.0
     frame_idx = 0
+    live_miss = 0                 # canli kaynakta ust uste basarisiz okuma sayaci
     cut_count = 0
     cut_banner = 0
     paused = False
@@ -517,18 +681,52 @@ def main():
             os.makedirs(ed, exist_ok=True)
         eval_file = open(config.EVAL_LOG_PATH, "w", newline="")
         eval_writer = csv.writer(eval_file)
-        eval_writer.writerow(["frame", "x1", "y1", "x2", "y2", "fx", "fy"])
+        # Meta satirlari ('#' ile baslar; compare.py raporun "Genel Bilgiler"
+        # bolumunu bunlardan uretir). AYRI dosya acmamak icin CSV'nin icine yazilir.
+        eval_file.write("# video={}\n".format(config.VIDEO_PATH))
+        eval_file.write("# tracker={}\n".format(config.TRACKER_TYPE))
+        eval_file.write("# predict={}\n".format(config.PREDICT_TYPE))
+        eval_file.write("# proc_scale={} frame_skip={}\n".format(
+            config.PROC_SCALE, config.FRAME_SKIP))
+        # px,py = FILTRELENMIS konumun (Kalman/CV/CA/ABG/IMM ciktisi) goruntuye geri
+        # izdusumu. fx,fy ham tracker kutusundan gelir; px,py filtre KALITESINI olcer
+        # -> tahmin modelleri ancak bu sutunla adil kiyaslanabilir.
+        # wx,wy = FILTRELENMIS dunya konumu (metre); zone = sistemin urettigi bolge
+        # etiketi. Bolge dogrulugu ancak sistemin GERCEK ciktisiyla olculebilir --
+        # sonradan yeniden hesaplamak sistemin kalibrasyonunu taklit etmek olurdu.
+        eval_writer.writerow(["frame", "x1", "y1", "x2", "y2", "fx", "fy",
+                              "px", "py", "wx", "wy", "zone"])
         print("Eval logu acik: {}".format(config.EVAL_LOG_PATH))
 
     # Threaded okuyucu: decode + resize'i arka planda yapar (bkz. framereader.py).
     # cap simdiden itibaren SADECE bu thread tarafindan okunur. Ilk kare (frame 0)
     # kurulumda kullanildi; okuyucu frame 1'den devam eder.
+    # Benchmark segmenti: istenen kaynak karesine atla (bkz. config.EVAL_START_FRAME).
+    # Kurulum (arka plan modeli/kort) TUM videodan yapildigi icin etkilenmez.
+    eval_seg = bool(config.EVAL_LOG and config.EVAL_START_FRAME > 0)
+    if eval_seg:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(config.EVAL_START_FRAME))
+        print("Eval segmenti: {}. kareden basliyor.".format(config.EVAL_START_FRAME))
+
+    # --- Overlay yayini: telefondan http://<pi-ip>:PORT/ ile izlenir --------
+    # Pi ekransiz calistigi icin kurulumun dogru gidip gitmedigini (kort dogru
+    # bulundu mu, oyuncu tutuluyor mu) gormenin pratik yolu budur.
+    stream = None
+    if config.STREAM_ENABLED:
+        stream = mjpeg.Streamer(config.STREAM_PORT, config.STREAM_QUALITY,
+                                config.STREAM_MAX_FPS).start()
+        for ip in mjpeg.local_ips():
+            print("Canli overlay: http://{}:{}/".format(ip, config.STREAM_PORT))
+
     reader = None
     if config.THREADED_READ:
         reader = framereader.ThreadedReader(
             cap, scale, config.RESIZE_INTERP, config.FRAME_SKIP, config.THREADED_QUEUE).start()
 
     while True:
+        if _STOP["now"]:          # Ctrl-C: turu baslatmadan cik, kaynaklari kapat
+            break
+
         # ----------------------------------------------------------------------
         # BEKLEYEN SEEK ISTEGI (kaydirma cubugu) - oynatirken de duraklatilmisken de.
         # Bir ana atlamak SAHNE KESMESI gibidir: tracker/Kalman/MOG2/son konum
@@ -578,17 +776,48 @@ def main():
                 cap.grab()
             frame = cv2.resize(raw, None, fx=scale, fy=scale,
                                interpolation=config.RESIZE_INTERP) if scale != 1.0 else raw
-        elif frame_idx > 0:  # Ilk kare zaten okundu.
+        elif frame_idx > 0 or eval_seg:  # Ilk kare zaten okundu (segment modunda yeniden oku).
             ok, raw = cap.read()
             if not ok:
+                if live:
+                    # Canli akista TEK bir basarisiz okuma "akis bitti" demek
+                    # DEGILDIR (gecici surucu/USB/ag hatasi olabilir). Dosyada
+                    # okuma basarisizligi videonun sonudur; canli akis bitmez.
+                    live_miss += 1
+                    if live_miss < config.LIVE_MISS_TOLERANCE:
+                        perf.stop("video_okuma")
+                        continue
+                    print("Canli kaynak {} kez ust uste yanit vermedi -- cikiliyor.".format(
+                        live_miss))
                 break
-            for _ in range(config.FRAME_SKIP - 1):
-                cap.grab()  # Atlanan kareler decode edilmez.
+            live_miss = 0
+            if not live:
+                # Kare atlama yalnizca DOSYADA anlamli. Canlida bayat kareleri
+                # zaten okuyucu thread'i dusuruyor; burada ayrica grab() cagirmak
+                # TAZE kareleri atmak olurdu (ustelik LatestFrame'de grab() yok).
+                for _ in range(config.FRAME_SKIP - 1):
+                    cap.grab()  # Atlanan kareler decode edilmez.
             frame = cv2.resize(raw, None, fx=scale, fy=scale,
                                interpolation=config.RESIZE_INTERP) if scale != 1.0 else raw
         perf.stop("video_okuma")
 
         frame_idx += 1
+
+        # --- ARKA PLAN TAZELEME (yalnizca canli kip) ------------------------
+        # Kare HENUZ CIZILMEDI -> temiz goruntu, yani overlay modele sizmaz.
+        # bbox bir ONCEKI karenin kutusudur; oyuncu bir karede cok az yer
+        # degistirir ve BG_REFRESH_PAD emniyet payi biraktigi icin dislama
+        # gecerli kalir.
+        if live and config.BG_REFRESH_INTERVAL > 0 \
+                and frame_idx % config.BG_REFRESH_INTERVAL == 0:
+            bg = background.refresh(bg, frame, config.BG_REFRESH_ALPHA, exclude_box=bbox)
+            det_state["bg"] = cv2.GaussianBlur(bg, config.BG_BLUR, 0)
+
+        # Benchmark segmenti: istenen kare sayisi islendiyse bitir.
+        if config.EVAL_LOG and config.EVAL_MAX_FRAMES > 0 \
+                and frame_idx > config.EVAL_MAX_FRAMES:
+            frame_idx -= 1
+            break
 
         # Kucultulmus kare HEM sahne kesme HEM MOG2 icin kullanilir; ikisi de
         # kapaliysa hic uretilmez (bos yere resize etme).
@@ -969,19 +1198,32 @@ def main():
 
         # EVAL: tracker'in bu karedeki kutu+ayak konumu (normalize; YOLO ile kiyas icin).
         if eval_writer is not None:
-            ef = frame_idx - 1   # 0-tabanli kaynak kare (FRAME_SKIP=1 iken YOLO ile eslesir)
+            # 0-tabanli KAYNAK kare no (segment ofseti dahil) -> YOLO ile hizalanir.
+            ef = config.EVAL_START_FRAME + frame_idx - 1
             if bbox is not None and display_pos is not None:
                 bx, by, bw, bh = bbox
                 efx, efy = foot_point(bbox)
+                # Filtrelenmis dunya konumunu goruntuye geri izdusur (filtre kalitesi).
+                pimg = court.court_to_image(H_inv, display_pos[0], display_pos[1])
+                px = round(pimg[0] / frame_w, 5) if pimg else ""
+                py = round(pimg[1] / frame_h, 5) if pimg else ""
                 eval_writer.writerow([ef,
                                       round(bx / frame_w, 5), round(by / frame_h, 5),
                                       round((bx + bw) / frame_w, 5), round((by + bh) / frame_h, 5),
-                                      round(efx / frame_w, 5), round(efy / frame_h, 5)])
+                                      round(efx / frame_w, 5), round(efy / frame_h, 5),
+                                      px, py,
+                                      round(display_pos[0], 4), round(display_pos[1], 4),
+                                      zone if zone else ""])
             else:
-                eval_writer.writerow([ef, "", "", "", "", "", ""])
+                eval_writer.writerow([ef, "", "", "", "", "", "", "", "", "", "", ""])
 
         if writer is not None:
             writer.write(frame)
+
+        # Overlay'i yayina ver. UCUZ: yalnizca kareye referans birakir; JPEG
+        # kodlamasi HTTP thread'inde ve SADECE bagli izleyici varken yapilir.
+        if stream is not None:
+            stream.update(frame)
 
         # Kareyi kapat: FPS guncelle, saniyede bir canli PERF raporu bas.
         perf.frame_end()
@@ -1015,9 +1257,16 @@ def main():
                 trail.clear()
 
     cap.release()
+    if stream is not None:
+        stream.stop()
     if writer is not None:
         writer.release()
     if eval_file is not None:
+        # Kapanis meta satirlari: rapordaki FPS / sure / kare sayisi buradan gelir.
+        eval_file.write("# frames={}\n".format(frame_idx))
+        eval_file.write("# avg_fps={:.2f}\n".format(fps))
+        eval_file.write("# elapsed_sec={:.1f}\n".format(time.perf_counter() - run_t0))
+        eval_file.write("# src_fps={:.2f}\n".format(src_fps))
         eval_file.close()
     cv2.destroyAllWindows()
 
@@ -1032,6 +1281,25 @@ def main():
 
     # Performans ozeti (asama sureleri + FPS) -> Pi <-> Windows karsilastirmasi.
     perf.summary()
+
+    # TRACKER PERFORMANCE SUMMARY (otomatik): eval logu acik VE YOLO referans
+    # CSV'si varsa, video bitiminde profesyonel ozet raporu dogrudan burada basilir
+    # (compare.py'nin load/evaluate/report fonksiyonlari yeniden kullanilir).
+    # Referans yoksa sessizce atlanir; normal calismayi ETKILEMEZ.
+    if config.EVAL_LOG and config.EVAL_AUTO_REPORT:
+        if os.path.isfile(config.EVAL_REFERENCE_CSV):
+            try:
+                import compare
+                ref, _ = compare.load(config.EVAL_REFERENCE_CSV)
+                trk, meta = compare.load(config.EVAL_LOG_PATH)
+                compare.report(meta.get("tracker", config.TRACKER_TYPE),
+                               meta, compare.evaluate(ref, trk))
+            except Exception as exc:                      # rapor asla calismayi bozmasin
+                print("Ozet rapor uretilemedi: {}".format(exc))
+        else:
+            print("Ozet rapor atlandi: referans CSV yok ({}). "
+                  "PC'de yolo_reference.py ile uretip buraya kopyalayin.".format(
+                      config.EVAL_REFERENCE_CSV))
 
 
 if __name__ == "__main__":

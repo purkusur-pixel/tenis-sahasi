@@ -1,0 +1,172 @@
+{
+ "video": "A1.mp4",
+ "frame_index": 0,
+ "note": "FIT = homografi capasi, TEST = held-out dogruluk olcumu",
+ "world": {
+  "FILE-sol (cift yan)": {
+   "x": 0.0,
+   "y": 11.885,
+   "role": "fit"
+  },
+  "FILE-sag (cift yan)": {
+   "x": 10.97,
+   "y": 11.885,
+   "role": "fit"
+  },
+  "FILE-orta (orta servis)": {
+   "x": 5.485,
+   "y": 11.885,
+   "role": "fit"
+  },
+  "YAKIN SERVIS-sol (tekler)": {
+   "x": 1.37,
+   "y": 18.285,
+   "role": "fit"
+  },
+  "YAKIN SERVIS-sag (tekler)": {
+   "x": 9.6,
+   "y": 18.285,
+   "role": "fit"
+  },
+  "UZAK DIP-sol (cift yan)": {
+   "x": 0.0,
+   "y": 0.0,
+   "role": "test"
+  },
+  "UZAK DIP-sag (cift yan)": {
+   "x": 10.97,
+   "y": 0.0,
+   "role": "test"
+  },
+  "UZAK DIP-sol (tekler)": {
+   "x": 1.37,
+   "y": 0.0,
+   "role": "test"
+  },
+  "UZAK DIP-sag (tekler)": {
+   "x": 9.6,
+   "y": 0.0,
+   "role": "test"
+  },
+  "UZAK DIP-orta isaret": {
+   "x": 5.485,
+   "y": 0.0,
+   "role": "test"
+  },
+  "UZAK SERVIS-sol (tekler)": {
+   "x": 1.37,
+   "y": 5.484999999999999,
+   "role": "test"
+  },
+  "UZAK SERVIS-sag (tekler)": {
+   "x": 9.6,
+   "y": 5.484999999999999,
+   "role": "test"
+  },
+  "UZAK SERVIS-orta": {
+   "x": 5.485,
+   "y": 5.484999999999999,
+   "role": "test"
+  },
+  "FILE-sol (tekler yan)": {
+   "x": 1.37,
+   "y": 11.885,
+   "role": "test"
+  },
+  "FILE-sag (tekler yan)": {
+   "x": 9.6,
+   "y": 11.885,
+   "role": "test"
+  },
+  "YAKIN SERVIS-orta": {
+   "x": 5.485,
+   "y": 18.285,
+   "role": "test"
+  },
+  "YAKIN DIP-sol (cift yan)": {
+   "x": 0.0,
+   "y": 23.77,
+   "role": "test"
+  },
+  "YAKIN DIP-sag (cift yan)": {
+   "x": 10.97,
+   "y": 23.77,
+   "role": "test"
+  },
+  "YAKIN DIP-orta isaret": {
+   "x": 5.485,
+   "y": 23.77,
+   "role": "test"
+  }
+ },
+ "points": {
+  "FILE-sol (cift yan)": [
+   756,
+   620
+  ],
+  "FILE-sag (cift yan)": [
+   1698,
+   636
+  ],
+  "FILE-orta (orta servis)": [
+   1168,
+   627
+  ],
+  "YAKIN SERVIS-sol (tekler)": [
+   515,
+   688
+  ],
+  "YAKIN SERVIS-sag (tekler)": [
+   1541,
+   725
+  ],
+  "UZAK DIP-sol (cift yan)": [
+   1048,
+   572
+  ],
+  "UZAK DIP-sag (cift yan)": [
+   1644,
+   572
+  ],
+  "UZAK DIP-sol (tekler)": [
+   1109,
+   572
+  ],
+  "UZAK DIP-sag (tekler)": [
+   1559,
+   572
+  ],
+  "UZAK DIP-orta isaret": [
+   1324,
+   572
+  ],
+  "UZAK SERVIS-sol (tekler)": [
+   1029,
+   588
+  ],
+  "UZAK SERVIS-sag (tekler)": [
+   1557,
+   592
+  ],
+  "UZAK SERVIS-orta": [
+   1271,
+   590
+  ],
+  "FILE-sol (tekler yan)": [
+   847,
+   622
+  ],
+  "FILE-sag (tekler yan)": [
+   1552,
+   634
+  ],
+  "YAKIN SERVIS-orta": [
+   956,
+   702
+  ],
+  "YAKIN DIP-orta isaret": [
+   444,
+   885
+  ]
+ }
+}
