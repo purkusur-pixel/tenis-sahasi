@@ -401,6 +401,11 @@ Program çalışırken [`output/`](output/) klasörüne şunları yazar:
   <img src="assets/tubitak-logo.png" alt="TÜBİTAK" height="110" />
 </p>
 
+<p align="center">
+  <b>Trabzon Üniversitesi Spor Bilimleri Fakültesi</b><br />
+  <b>Trabzon Üniversitesi Sporda Performans Değerlendirme ve Yetenek Seçimi Uygulama ve Araştırma Merkezi</b>
+</p>
+
 Bu çalışma, Türkiye Bilimsel ve Teknolojik Araştırma Kurumu (TÜBİTAK) tarafından 1001 Programı – Spor Araştırmaları kapsamında desteklenen 124M890 numaralı "Tenis için Yapay Zekâ Destekli Top Atma Makinesi Üretimi" başlıklı proje kapsamında gerçekleştirilmiştir.
 
 This study was supported by the Scientific and Technological Research Council of Türkiye (TÜBİTAK) under the 1001 Programme – Sports Research (Project No: 124M890) within the scope of the project titled "Production of an Artificial Intelligence-Assisted Ball-Throwing Machine for Tennis".
