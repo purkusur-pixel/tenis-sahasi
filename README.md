@@ -393,4 +393,21 @@ Program çalışırken [`output/`](output/) klasörüne şunları yazar:
 
 ---
 
-*Raspberry Pi staj projesi — 2025*
+## 🏛 Proje Desteği ve Atıf
+
+<p align="center">
+  <img src="assets/trabzon-universitesi-logo.png" alt="Trabzon Üniversitesi" height="110" />
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="assets/tubitak-logo.png" alt="TÜBİTAK" height="110" />
+</p>
+
+Bu çalışma, Türkiye Bilimsel ve Teknolojik Araştırma Kurumu (TÜBİTAK) tarafından 1001 Programı – Spor Araştırmaları kapsamında desteklenen 124M890 numaralı "Tenis için Yapay Zekâ Destekli Top Atma Makinesi Üretimi" başlıklı proje kapsamında gerçekleştirilmiştir.
+
+This study was supported by the Scientific and Technological Research Council of Türkiye (TÜBİTAK) under the 1001 Programme – Sports Research (Project No: 124M890) within the scope of the project titled "Production of an Artificial Intelligence-Assisted Ball-Throwing Machine for Tennis".
+
+**Proje Yürütücüsü:** Prof. Dr. Serdar Alemdağ  
+**Yazılım Geliştirici:** Hüsnü Canbolat (husnucanbolat@trabzon.edu.tr)  
+**Çalışma Kapsamı:** Raspberry Pi üzerinde yapay zekâ kullanmadan; arka plan modelleme, otomatik kort tespiti ve homografi dönüşümüyle sabit kamera görüntüsündeki oyuncuyu gerçek zamanlı takip eden, korttaki konumunu metre cinsinden ve bölge bazında raporlayıp telefon tarayıcısına canlı yayınlayan tenis kortu oyuncu takip sistemi geliştirilmiştir.  
+**Lisans:** MIT License — ayrıntılar için [LICENSE](LICENSE) dosyasına bakınız.
+
+Bu çalışmayı akademik veya endüstriyel projelerinizde kullanırsanız lütfen depoya atıfta bulununuz.
